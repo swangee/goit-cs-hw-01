@@ -132,46 +132,55 @@ class Parser:
             self.error()
 
     def term(self):
-        """Парсер для 'term' правил граматики. У нашому випадку - це цілі числа та вирази в дужках."""
-        token = self.current_token
+        """Парсер для арифметичних виразів множення та ділення."""
+        node = self.factor()
 
-        """Якщо знайдено ліву дужку, запускаємо обробку виразу в дужках"""
-        if token.type == TokenType.LPAREN:
-            return self.factor()
+        while self.current_token.type in (TokenType.MUL, TokenType.DIV):
+            token = self.current_token
 
-        self.eat(TokenType.INTEGER)
-        return Num(token)
+            rop = None
 
-    def factor(self):
-        """Зчитуємо ліву дужку"""
-        self.eat(TokenType.LPAREN)
+            if token.type == TokenType.MUL:
+                self.eat(TokenType.MUL)
+                rop = self.factor()
+            elif token.type == TokenType.DIV:
+                self.eat(TokenType.DIV)
+                rop = self.factor()
 
-        """Запускаємо обрахунок виразу.
-        Якщо всередині виразу є ще дужки, вони будуть рекурсивно опрацьовані"""
-        node = self.expr()
+                if rop == 0:
+                    raise RuntimeError('division by zero')
 
-        """Якщо поточний токен не права дужка, кидаємо помилку"""
-        if self.current_token.type != TokenType.RPAREN:
-            raise ParsingError(f"expected {TokenType.RPAREN}")
-
-        self.eat(TokenType.RPAREN)
+            node = BinOp(left=node, op=token, right=rop)
 
         return node
 
+    def factor(self):
+        """Парсер для чисел або виразів у дужках."""
+        token = self.current_token
+        if token.type == TokenType.INTEGER:
+            self.eat(TokenType.INTEGER)
+            return Num(token)
+        elif token.type == TokenType.LPAREN:
+            self.eat(TokenType.LPAREN)
+            node = self.expr()
+
+            if self.current_token.type != TokenType.RPAREN:
+                raise SyntaxError('RPAREN expected')
+
+            self.eat(TokenType.RPAREN)
+
+            return node
+
     def expr(self):
-        """Парсер для арифметичних виразів."""
+        """Парсер для арифметичних виразів додавання та віднімання."""
         node = self.term()
 
-        while self.current_token.type in (TokenType.PLUS, TokenType.MINUS, TokenType.MUL, TokenType.DIV):
+        while self.current_token.type in (TokenType.PLUS, TokenType.MINUS):
             token = self.current_token
             if token.type == TokenType.PLUS:
                 self.eat(TokenType.PLUS)
             elif token.type == TokenType.MINUS:
                 self.eat(TokenType.MINUS)
-            elif token.type == TokenType.MUL:
-                self.eat(TokenType.MUL)
-            elif token.type == TokenType.DIV:
-                self.eat(TokenType.DIV)
 
             node = BinOp(left=node, op=token, right=self.term())
 
